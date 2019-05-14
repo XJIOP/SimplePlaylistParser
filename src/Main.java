@@ -60,10 +60,10 @@ public class Main {
 		
 		Options options = new Options();
 
-	    Option input = new Option("i", "input", true, "input file path or url");
+	    Option input = new Option("i", "input", true, "input filepath or url to m3u playlist");
 	    options.addOption(input);
 
-	    Option output = new Option("o", "output", true, "output file");
+	    Option output = new Option("o", "output", true, "output playlist filename");
 	    options.addOption(output);
 
 	    CommandLineParser parser = new DefaultParser();
@@ -73,8 +73,7 @@ public class Main {
 	    try {
 	    	cmd = parser.parse(options, args);
 	    } catch (ParseException e) {
-	    	System.out.println(e.getMessage());
-	        formatter.printHelp("utility-name", options);
+	        formatter.printHelp("launch.jar", options);
 	        System.exit(1);
 	    }
 
@@ -107,7 +106,7 @@ public class Main {
 		// cli
 		if(inputFile != null) {
 			
-			if(inputFile.matches("^.*://")) {
+			if(inputFile.matches("^.*:\\/\\/.*")) {
 				URL = inputFile;
 				try {
 					download();
