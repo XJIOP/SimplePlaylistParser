@@ -12,10 +12,20 @@ import java.net.HttpURLConnection;
 import java.net.InetSocketAddress;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.zip.GZIPInputStream;
+
+import org.apache.commons.cli.CommandLine;
+import org.apache.commons.cli.CommandLineParser;
+import org.apache.commons.cli.DefaultParser;
+import org.apache.commons.cli.HelpFormatter;
+import org.apache.commons.cli.Option;
+import org.apache.commons.cli.Options;
+import org.apache.commons.cli.ParseException;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
@@ -23,7 +33,7 @@ import com.sun.net.httpserver.HttpServer;
 
 public class Main {
 
-	private boolean _debug = true;
+	private boolean _debug = false;
 
 	private String SETTINGS_FILE = "config/settings.cfg";
 	private String FILTER_FILE = "config/filter.list";
@@ -39,13 +49,43 @@ public class Main {
 	private String _output = "playlist.m3u";
 	private static String _playlist;
 	
-	public static void main(String[] args) {		
-		new Main().launch();
+	public static void main(String[] args) {			
+		new Main().launch(args);
 	}
 
-	private void launch() {
+	private void launch(String[] args) {
 		log("launch");
 
+		/* Read args */
+		
+		Options options = new Options();
+
+	    Option input = new Option("i", "input", true, "input file path or url");
+	    options.addOption(input);
+
+	    Option output = new Option("o", "output", true, "output file");
+	    options.addOption(output);
+
+	    CommandLineParser parser = new DefaultParser();
+	    HelpFormatter formatter = new HelpFormatter();
+	    CommandLine cmd = null;
+
+	    try {
+	    	cmd = parser.parse(options, args);
+	    } catch (ParseException e) {
+	    	System.out.println(e.getMessage());
+	        formatter.printHelp("utility-name", options);
+	        System.exit(1);
+	    }
+
+	    String inputFile = cmd.getOptionValue("input");
+	    String outputFile = cmd.getOptionValue("output");
+	     
+	    if(outputFile != null)
+	    	_output = outputFile;
+	     
+	    /* Load settings */
+		
 		String config = readFile(SETTINGS_FILE);
 
 		Properties prop = new Properties();
@@ -62,10 +102,33 @@ public class Main {
 		SERVER = prop.getProperty("SERVER").equals("true");
 		PORT = Integer.parseInt(prop.getProperty("PORT"));
 			
-		if(SERVER)
-			Server();		
+		/* Run app */
 		
-		Parser();
+		// cli
+		if(inputFile != null) {
+			
+			if(inputFile.matches("^.*://")) {
+				URL = inputFile;
+				try {
+					download();
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+			}
+			else
+			{
+				savePlaylist(readFile(inputFile));
+			}
+			
+		}
+		// service
+		else
+		{
+			if(SERVER)
+				Server();		
+		
+			Service();
+		}
 	}
 
 	private void Server() {
@@ -93,17 +156,18 @@ public class Main {
         }
     }
 	
-	private synchronized void Parser() {
-		log("run parser");
+	private synchronized void Service() {
+		log("run service");
 		
 		while (true) {
 			try {
-				download();
+				download();				
 				log("wait");
 				this.wait(INTERVAL*60000);
 				log("timeout");
 			} catch (Exception e) {
 				e.printStackTrace();
+				break;
 			}
 		}
 	}
@@ -170,7 +234,22 @@ public class Main {
 		log("filterChannels");
 
 		String read = readFile(FILTER_FILE);
-		String channels[] = read.split("\\r?\\n", -1);
+		String filter[] = read.split("\\r?\\n", -1);
+
+		Map<String, String> channels = new LinkedHashMap<String, String>();
+		
+		String group = null;
+		
+		for(String f : filter) {
+
+			Pattern p = Pattern.compile("\\[(.*)\\]");
+			Matcher m = p.matcher(f);
+			if (m.find()) {
+				group = m.group(1);
+			}
+			
+			channels.put(f, group);			
+		}		
 		
 		StringBuffer result = new StringBuffer();
 		result.append("#EXTM3U");
@@ -178,21 +257,36 @@ public class Main {
 
 		ArrayList<String> unique = new ArrayList<>();
 		
-		for (String ch : channels) {
+		for (Map.Entry<String, String> ch : channels.entrySet()) {
 			// log("channel | " + ch);
-			Pattern p = Pattern.compile("(#EXTINF:.*,\\s*" + Pattern.quote(ch) + ")\\s*(.*:\\/\\/.*)");
+			Pattern p = Pattern.compile("(#EXTINF:[0-9- ]+(group-title=\"[^\"]*\")?.*,\\s*" + Pattern.quote(ch.getKey()) + ")\\s*(.*:\\/\\/.*)", Pattern.CASE_INSENSITIVE);
 			Matcher m = p.matcher(source);
 			while (m.find()) {
 				// log("found channel | " + ch);
 				
-				String link = m.group(2);
+				String link = m.group(3);
 				
 				if(unique.contains(link))
 					continue;
 				
+				String extinf = m.group(1);
+				
+				if(ch.getValue() != null) {
+				
+					// add group
+					if(m.group(2) == null) {
+						extinf = extinf.replaceFirst("(#EXTINF:[0-9- ]+)", "$1 group-title=\"" + ch.getValue() + "\"");
+					}
+					// replace group
+					else
+					{
+						extinf = extinf.replaceFirst("(group-title=\"[^\"]*\")", "group-title=\"" + ch.getValue() + "\"");
+					}
+				}
+				
 				unique.add(link);
 				
-				result.append(m.group(1));
+				result.append(extinf);
 				result.append(System.lineSeparator());
 				result.append(link);
 				result.append(System.lineSeparator());
