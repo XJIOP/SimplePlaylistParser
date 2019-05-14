@@ -23,13 +23,13 @@ import com.sun.net.httpserver.HttpServer;
 
 public class Main {
 
-	private boolean _debug = false;
+	private boolean _debug = true;
 
 	private String SETTINGS_FILE = "config/settings.cfg";
 	private String FILTER_FILE = "config/filter.list";
 
 	private String URL;
-	private String CHARSET;
+	private String CHARSET = "UTF8";
 	private boolean FILTER;
 	private int INTERVAL;
 	private boolean SERVER;
@@ -171,7 +171,7 @@ public class Main {
 
 		String read = readFile(FILTER_FILE);
 		String channels[] = read.split("\\r?\\n", -1);
-
+		
 		StringBuffer result = new StringBuffer();
 		result.append("#EXTM3U");
 		result.append(System.lineSeparator());
