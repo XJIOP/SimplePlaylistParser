@@ -256,8 +256,16 @@ public class Main {
 			str.append("#EXTM3U");
 			str.append(System.lineSeparator());			
 			
+			List<String> uniqueLinks = new ArrayList<>();
+			
 			for(Dummy.Channel ch : channels) {
+				
+				if(uniqueLinks.contains(ch.url))
+					continue;
+				
 				str.append(ch.data);
+				
+				uniqueLinks.add(ch.url);
 			}
 			
 			result = str.toString();
@@ -293,7 +301,6 @@ public class Main {
 		}		
 		
 		List<Dummy.Channel> result = new ArrayList<>();
-		List<String> uniqueLinks = new ArrayList<>();
 		
 		String include_hd = HD ? "(?:\\s*HD)?" : ""; 
 		
@@ -304,11 +311,7 @@ public class Main {
 			while (m.find()) {
 				// log("found channel | " + ch);
 				
-				String link = m.group(5);
-				
-				if(uniqueLinks.contains(link))
-					continue;
-				
+				String link = m.group(5);		
 				String extinf = m.group(1);
 				
 				// remove first space by name
@@ -331,15 +334,13 @@ public class Main {
 					}
 				}
 				
-				uniqueLinks.add(link);
-				
 				StringBuffer str = new StringBuffer();
 				str.append(extinf);
 				str.append(System.lineSeparator());
 				str.append(link);
 				str.append(System.lineSeparator());
 
-				result.add(new Dummy.Channel(m.group(3), str.toString()));	
+				result.add(new Dummy.Channel(m.group(3), link, str.toString()));	
 			}
 		}
 
