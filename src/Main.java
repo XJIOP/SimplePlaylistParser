@@ -311,6 +311,9 @@ public class Main {
 				
 				String extinf = m.group(1);
 				
+				// remove first space by name
+				extinf = extinf.replaceFirst(",\\s", ",");
+				
 				// group channels
 				if(ch.getValue() != null) {				
 				
