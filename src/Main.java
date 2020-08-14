@@ -12,7 +12,10 @@ import java.net.HttpURLConnection;
 import java.net.InetSocketAddress;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.regex.Matcher;
@@ -38,9 +41,11 @@ public class Main {
 	private String SETTINGS_FILE = "config/settings.cfg";
 	private String FILTER_FILE = "config/filter.list";
 
-	private String URL;
+	private List<String> URLS = new ArrayList<>();
 	private String CHARSET = "UTF8";
+	private String USER_AGENT;
 	private boolean FILTER;
+	private boolean HD;
 	private int INTERVAL;
 	private boolean SERVER;
 	private int PORT;
@@ -94,9 +99,12 @@ public class Main {
 			e.printStackTrace();
 		}
 
-		URL = prop.getProperty("URL");
+		URLS = Arrays.asList(prop.getProperty("URLS").split(",\\s*"));
 		CHARSET = prop.getProperty("CHARSET");
+		USER_AGENT = prop.getProperty("USER_AGENT");
 		FILTER = prop.getProperty("FILTER").equals("true");
+		HD = prop.getProperty("HD").equals("true");
+				
 		INTERVAL = Integer.parseInt(prop.getProperty("INTERVAL"));		
 		SERVER = prop.getProperty("SERVER").equals("true");
 		PORT = Integer.parseInt(prop.getProperty("PORT"));
@@ -107,12 +115,7 @@ public class Main {
 		if(inputFile != null) {
 			
 			if(inputFile.matches("^.*:\\/\\/.*")) {
-				URL = inputFile;
-				try {
-					download();
-				} catch (Exception e) {
-					e.printStackTrace();
-				}
+				parsePlaylists();
 			}
 			else
 			{
@@ -129,7 +132,7 @@ public class Main {
 			Service();
 		}
 	}
-
+	
 	private void Server() {
 		log("run server");
 		
@@ -160,7 +163,7 @@ public class Main {
 		
 		while (true) {
 			try {
-				download();				
+				parsePlaylists();
 				log("wait");
 				this.wait(INTERVAL*60000);
 				log("timeout");
@@ -170,24 +173,46 @@ public class Main {
 			}
 		}
 	}
+	
+	private void parsePlaylists() {
+		
+		String result = null;
+		
+		int size = URLS.size();
+		for(int i=0; i < size; i++) {
 
-	private void download() throws Exception {
-		log("download");
+			try {
+				result += download(URLS.get(i));
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+			finally {
+				if(i == size - 1)
+					savePlaylist(result);
+			}
+		}
+	}	
 
-		URL url = new URL(URL);
+	private String download(String link) throws Exception {
+		log("download: " + link);
+
+		URL url = new URL(link);
 
 		HttpURLConnection con = (HttpURLConnection) url.openConnection();
 		con.setRequestProperty("Accept-Encoding", "gzip");
-
+		
+		if(USER_AGENT != null)
+			con.setRequestProperty("User-Agent", USER_AGENT);
+		
 		if (con.getResponseCode() != 200) {
 			log("httpcode " + con.getResponseCode());
-			return;
+			return "";
 		}
 
-		long lastModified = con.getLastModified();
-		if (lastModified == _timestamp) {
+		long lastModified = con.getLastModified();	
+		if (lastModified > 0 && lastModified == _timestamp) {
 			log("no changes");
-			return;
+			return "";
 		}
 
 		_timestamp = lastModified;
@@ -210,26 +235,43 @@ public class Main {
 		}
 
 		in.close();
-
-		savePlaylist(output.toString());
+		
+		return output.toString(); 
 	}
 
 	private void savePlaylist(String source) {
 		log("savePlaylist");
 
+		if(source == null || source.isEmpty())
+			return;
+		
 		String result;
 
-		if (FILTER)
-			result = filterChannels(source);
-		else
+		if (FILTER) {
+			
+			List<Dummy.Channel> channels = filterChannels(source);
+			Collections.sort(channels);
+			
+			StringBuffer str = new StringBuffer();
+			str.append("#EXTM3U");
+			str.append(System.lineSeparator());			
+			
+			for(Dummy.Channel ch : channels) {
+				str.append(ch.data);
+			}
+			
+			result = str.toString();
+		}
+		else {
 			result = source;
+		}
 
 		_playlist = result;
 		
 		writeToFile(_output, result);
 	}
 
-	private String filterChannels(String source) {
+	private List<Dummy.Channel> filterChannels(String source) {
 		log("filterChannels");
 
 		String read = readFile(FILTER_FILE);
@@ -250,49 +292,55 @@ public class Main {
 			channels.put(f, group);			
 		}		
 		
-		StringBuffer result = new StringBuffer();
-		result.append("#EXTM3U");
-		result.append(System.lineSeparator());
-
-		ArrayList<String> unique = new ArrayList<>();
+		List<Dummy.Channel> result = new ArrayList<>();
+		List<String> uniqueLinks = new ArrayList<>();
+		
+		String include_hd = HD ? "(?:\\s*HD)?" : ""; 
 		
 		for (Map.Entry<String, String> ch : channels.entrySet()) {
 			// log("channel | " + ch);
-			Pattern p = Pattern.compile("(#EXTINF:[0-9- ]+(group-title=\"[^\"]*\")?.*,\\s*" + Pattern.quote(ch.getKey()) + ")\\s*(.*:\\/\\/.*)", Pattern.CASE_INSENSITIVE);
+			Pattern p = Pattern.compile("(#EXTINF:[0-9- ]+(group-title=\"[^\"]*\")?.*,\\s*(" + Pattern.quote(ch.getKey()) + include_hd + "))(\\s*#EXTGRP:.*)?\\s*(.*:\\/\\/.*)", Pattern.CASE_INSENSITIVE);
 			Matcher m = p.matcher(source);
 			while (m.find()) {
 				// log("found channel | " + ch);
 				
-				String link = m.group(3);
+				String link = m.group(5);
 				
-				if(unique.contains(link))
+				if(uniqueLinks.contains(link))
 					continue;
 				
 				String extinf = m.group(1);
 				
-				if(ch.getValue() != null) {
+				// group channels
+				if(ch.getValue() != null) {				
 				
-					// add group
-					if(m.group(2) == null) {
-						extinf = extinf.replaceFirst("(#EXTINF:[0-9- ]+)", "$1 group-title=\"" + ch.getValue() + "\"");
-					}
-					// replace group
-					else
-					{
+					// replace group-title
+					if(m.group(2) != null) {
 						extinf = extinf.replaceFirst("(group-title=\"[^\"]*\")", "group-title=\"" + ch.getValue() + "\"");
+					}
+					// add group
+					else {
+						extinf = extinf.replaceFirst("(#EXTINF:[0-9- ]+)", "$1 group-title=\"" + ch.getValue() + "\"");
+
+						// remove EXTGRP
+						if(m.group(4) != null)
+							extinf = extinf.replaceFirst("(\\s*#EXTGRP:.*)", "");
 					}
 				}
 				
-				unique.add(link);
+				uniqueLinks.add(link);
 				
-				result.append(extinf);
-				result.append(System.lineSeparator());
-				result.append(link);
-				result.append(System.lineSeparator());
+				StringBuffer str = new StringBuffer();
+				str.append(extinf);
+				str.append(System.lineSeparator());
+				str.append(link);
+				str.append(System.lineSeparator());
+
+				result.add(new Dummy.Channel(m.group(3), str.toString()));	
 			}
 		}
 
-		return result.toString();
+		return result;
 	}
 
 	private String readFile(String location) {
