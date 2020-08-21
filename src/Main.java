@@ -45,7 +45,9 @@ public class Main {
 	private String CHARSET = "UTF8";
 	private String USER_AGENT;
 	private boolean FILTER;
-	private boolean HD;
+	private boolean INCLUDE_HD;
+	private boolean ANY_END_NAME;
+	private String IGNORE_CHANNELS;
 	private int INTERVAL;
 	private boolean SERVER;
 	private int PORT;
@@ -103,8 +105,9 @@ public class Main {
 		CHARSET = prop.getProperty("CHARSET");
 		USER_AGENT = prop.getProperty("USER_AGENT");
 		FILTER = prop.getProperty("FILTER").equals("true");
-		HD = prop.getProperty("HD").equals("true");
-				
+		INCLUDE_HD = prop.getProperty("INCLUDE_HD").equals("true");
+		ANY_END_NAME = prop.getProperty("ANY_END_NAME").equals("true");
+		IGNORE_CHANNELS = prop.getProperty("IGNORE_CHANNELS");
 		INTERVAL = Integer.parseInt(prop.getProperty("INTERVAL"));		
 		SERVER = prop.getProperty("SERVER").equals("true");
 		PORT = Integer.parseInt(prop.getProperty("PORT"));
@@ -242,7 +245,7 @@ public class Main {
 	private void savePlaylist(String source) {
 		log("savePlaylist");
 
-		if(source == null || source.isEmpty())
+		if(isNullEmpty(source))
 			return;
 		
 		String result;
@@ -302,36 +305,58 @@ public class Main {
 		
 		List<Dummy.Channel> result = new ArrayList<>();
 		
-		String include_hd = HD ? "(?:\\s*HD)?" : ""; 
+		String hd = INCLUDE_HD ? "(?:\\s*HD)?" : ""; 
+		String end_name = ANY_END_NAME ? "(?:.*)?" : ""; 
 		
 		for (Map.Entry<String, String> ch : channels.entrySet()) {
 			// log("channel | " + ch);
-			Pattern p = Pattern.compile("(#EXTINF:[0-9- ]+(group-title=\"[^\"]*\")?.*,\\s*(" + Pattern.quote(ch.getKey()) + include_hd + "))(\\s*#EXTGRP:.*)?\\s*(.*:\\/\\/.*)", Pattern.CASE_INSENSITIVE);
+
+			Pattern p = Pattern.compile("^(#EXTINF:[0-9-]+[^\\r\\n]*,[ \\t]?(" + Pattern.quote(ch.getKey()) + hd + end_name + ")\\r?\\n[^* ]*)^[ \\t]?((?:https?|rtmp|rtsp):\\/\\/\\S+)$", Pattern.CASE_INSENSITIVE|Pattern.MULTILINE);
 			Matcher m = p.matcher(source);
 			while (m.find()) {
 				// log("found channel | " + ch);
-				
-				String link = m.group(5);		
+
 				String extinf = m.group(1);
+				String name = m.group(2);
+				String link = m.group(3);	
 				
-				// remove first space by name
+				if(isNullEmpty(extinf) || isNullEmpty(name) || isNullEmpty(link))
+					continue;
+
+				extinf = extinf.trim();
+				name = name.trim();
+				link = link.trim();
+				
+				if(!IGNORE_CHANNELS.isEmpty()) {
+
+					boolean ignore = false;
+					
+					List<String> keywords = Arrays.asList(IGNORE_CHANNELS.toLowerCase().split(",\\s*"));
+					String lower_case_name = name.toLowerCase();
+										
+					for(String word : keywords) {
+						if(lower_case_name.matches(".*\\b" + word + "\\b.*")) {						
+							ignore = true;
+							break;
+						}
+					}
+					
+					if(ignore)
+						continue;
+				}
+				
+				// remove first space in name
 				extinf = extinf.replaceFirst(",\\s", ",");
 				
-				// group channels
+				// custom group channels
 				if(ch.getValue() != null) {				
-				
-					// replace group-title
-					if(m.group(2) != null) {
-						extinf = extinf.replaceFirst("(group-title=\"[^\"]*\")", "group-title=\"" + ch.getValue() + "\"");
-					}
-					// add group
-					else {
-						extinf = extinf.replaceFirst("(#EXTINF:[0-9- ]+)", "$1 group-title=\"" + ch.getValue() + "\"");
 
-						// remove EXTGRP
-						if(m.group(4) != null)
-							extinf = extinf.replaceFirst("(\\s*#EXTGRP:.*)", "");
-					}
+					// remove group-title and EXTGRP
+					extinf = extinf.replaceAll("(\\s*group-title=\"[^\"]*\")", "");
+					extinf = extinf.replaceAll("(\\s*#EXTGRP:.*)", "");
+					
+					// add custom group
+					extinf = extinf.replaceFirst("(#EXTINF:[0-9-]+)", "$1 group-title=\"" + ch.getValue() + "\"");
 				}
 				
 				StringBuffer str = new StringBuffer();
@@ -340,7 +365,7 @@ public class Main {
 				str.append(link);
 				str.append(System.lineSeparator());
 
-				result.add(new Dummy.Channel(m.group(3), link, str.toString()));	
+				result.add(new Dummy.Channel(name, link, str.toString()));	
 			}
 		}
 
@@ -401,5 +426,9 @@ public class Main {
 		if (_debug) {
 			System.out.println(text);
 		}
+	}
+	
+	private boolean isNullEmpty(String text) {
+		return text == null || text.isEmpty();
 	}
 }
