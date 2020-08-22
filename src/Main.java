@@ -309,13 +309,12 @@ public class Main {
 		String end_name = ANY_END_NAME ? "(?:.*)?" : ""; 
 		
 		for (Map.Entry<String, String> ch : channels.entrySet()) {
-			log("channel | " + ch);
+			log("channel: " + ch);
 
-			// Pattern p = Pattern.compile("^(#EXTINF:[0-9-]+[^\\r\\n]*,[ \\t]?(" + Pattern.quote(ch.getKey()) + hd + end_name + ")\\r?\\n[^* ]*)^[ \\t]?((?:https?|rtmp|rtsp):\\/\\/\\S+)$", Pattern.CASE_INSENSITIVE|Pattern.MULTILINE);
-			Pattern p = Pattern.compile("(#EXTINF:[0-9-]+[^\\r\\n]*,[ \\t]*(" + Pattern.quote(ch.getKey()) + hd + end_name + ")\\r?\\n.*)\\s*((?:https?|rtmp|rtsp):\\/\\/\\S+)", Pattern.CASE_INSENSITIVE);
+			Pattern p = Pattern.compile("(#EXTINF:[0-9-]+[^\\r\\n]*,[ \\t]*(" + Pattern.quote(ch.getKey()) + hd + end_name + ")\\r?\\n.*)\\s*((?:https?|rtmp|rtsp):\\/\\/\\S+)", Pattern.CASE_INSENSITIVE|Pattern.UNICODE_CASE);
 			Matcher m = p.matcher(source);
 			while (m.find()) {
-				log("found channel | " + ch);
+				log(" - found: " + ch);
 
 				String extinf = m.group(1);
 				String name = m.group(2);
