@@ -9,7 +9,7 @@ Simple m3u playlist parser for IPTV, etc.
 - Filter specific channels name with ability to split into groups
 - Auto include HD channels
 - Allow any end of channel name
-- Ignore channels by keywords
+- Ignore channel by keywords
 - Local web server to access your parsed playlist (http://192.168.1.*:8765/playlist.m3u)
 
 **How to use:**
