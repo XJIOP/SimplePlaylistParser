@@ -315,7 +315,8 @@ public class Main {
 		for (Map.Entry<String, String> ch : channels.entrySet()) {
 			log("channel: " + ch);
 
-			Pattern p = Pattern.compile("(#EXTINF:[0-9-]+[^\\r\\n]*,[ \\t]*(" + Pattern.quote(ch.getKey()) + hd + end_name + ")\\r?\\n.*)\\s*((?:https?|rtmp|rtsp):\\/\\/\\S+)", Pattern.CASE_INSENSITIVE|Pattern.UNICODE_CASE);
+			// (#EXTINF:[0-9-]+[^\r\n]*,[ \t]*(name)\r?\n(?:#EXT.*?\r?\n)*)((?:https?|rtmp|rtsp):\/\/\S+)
+			Pattern p = Pattern.compile("(#EXTINF:[0-9-]+[^\\r\\n]*,[ \\t]*(" + Pattern.quote(ch.getKey()) + hd + end_name + ")\\r?\\n(?:#EXT.*?\\r?\\n)*)((?:https?|rtmp|rtsp):\\/\\/\\S+)", Pattern.CASE_INSENSITIVE|Pattern.UNICODE_CASE);
 			Matcher m = p.matcher(source);
 			while (m.find()) {
 				log(" - found: " + ch);
