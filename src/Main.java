@@ -45,6 +45,7 @@ public class Main {
 	private String CHARSET = "UTF8";
 	private String USER_AGENT;
 	private boolean FILTER;
+	private boolean SORT;
 	private boolean INCLUDE_HD;
 	private boolean ANY_END_NAME;
 	private String IGNORE_CHANNELS;
@@ -105,6 +106,7 @@ public class Main {
 		CHARSET = prop.getProperty("CHARSET");
 		USER_AGENT = prop.getProperty("USER_AGENT");
 		FILTER = prop.getProperty("FILTER").equals("true");
+		SORT = prop.getProperty("SORT").equals("true");
 		INCLUDE_HD = prop.getProperty("INCLUDE_HD").equals("true");
 		ANY_END_NAME = prop.getProperty("ANY_END_NAME").equals("true");
 		IGNORE_CHANNELS = prop.getProperty("IGNORE_CHANNELS");
@@ -253,7 +255,9 @@ public class Main {
 		if (FILTER) {
 			
 			List<Dummy.Channel> channels = filterChannels(source);
-			Collections.sort(channels);
+			
+			if(SORT)
+				Collections.sort(channels);
 			
 			StringBuffer str = new StringBuffer();
 			str.append("#EXTM3U");
@@ -320,8 +324,12 @@ public class Main {
 				String name = m.group(2);
 				String link = m.group(3);	
 				
+				//log(" - extinf: " + extinf);
+				//log(" - name: " + name);
+				//log(" - link: " + link);
+				
 				if(isNullEmpty(extinf) || isNullEmpty(name) || isNullEmpty(link)) {
-					log(" - empty data");
+					log(" --- empty data");
 					continue;
 				}
 
@@ -343,8 +351,10 @@ public class Main {
 						}
 					}
 					
-					if(ignore)
+					if(ignore) {
+						log(" --- ignore");
 						continue;
+					}
 				}
 				
 				// remove first space in name
