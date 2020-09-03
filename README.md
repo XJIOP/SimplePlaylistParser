@@ -7,7 +7,10 @@ Simple m3u playlist parser for IPTV, etc.
 - Customize User-Agent
 - Parse interval
 - Filter specific channels name with ability to split into groups
+- Sort channels
 - Auto include HD channels
+- Allow any end of channel name
+- Ignore channel by keywords
 - Local web server to access your parsed playlist (http://192.168.1.*:8765/playlist.m3u)
 
 **How to use:**
@@ -15,11 +18,11 @@ Simple m3u playlist parser for IPTV, etc.
 - Edit settings.cfg
 - Edit filter.list if you want specific channels
 
-**Run as service:**
-- launch.jar
+**Run service for interval parsing:**
+- java -jar launch.jar
 
-**Run as single parsing:**
-- launch.jar --input (path to playlist file or url) --output (playlist output filename)
+**Run single parsing:**
+- java -jar launch.jar --input (path to playlist file or url) --output (playlist output filename)
 
 **System requirements:**
 - Windows / Linux
